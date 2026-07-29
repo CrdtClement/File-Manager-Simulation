@@ -8,7 +8,6 @@
 Objectifs: simuler un gestionnaire de fichiers
     - accès à une base de donnés
     - opération sur la base (ajouter un fichier, le renommer)
-    - 
 
 */
 
