@@ -1,6 +1,7 @@
 # File Recovery from Raw Storage
 
 > **TIPE 2024-2025 · Cardot Clément & William Guerin-Garnier · MPI · Lycée Louis Thuillier**
+> Supervised by Mme Fanny Canivet
 
 ## What is a TIPE?
 
@@ -20,64 +21,81 @@ When a file is deleted on most operating systems, only its metadata (the pointer
 
 The work is split into two complementary parts:
 
-- **Clément's part**  — design and implementation of a **simulated storage system** in C with an SQLite backend, acting as a virtual file system to provide a controlled environment for developing and testing recovery algorithms
-- **William's part**  — testing recovery on **real storage devices** and benchmarking against professional tools
+- **Clément's part** (this repository) — design and implementation of a **simulated storage system** in C with an SQLite backend, acting as a virtual file system, and a **file carving** algorithm to recover files from the raw hex dump
+- **William's part** (see [William's section](#williams-part)) — testing recovery on **real storage devices** and benchmarking against professional tools
 
 ---
 
-## Clément's part — Storage system simulator (C + SQLite)
+## Repository structure
 
-### What it does
+```
+.
+├── src/
+│   ├── storage_sim.c         # Storage simulator (English)
+│   ├── storage_sim_fr.c      # Storage simulator (French — original version)
+│   ├── recovery_files.c      # File carving algorithm (English)
+│   └── recovery_files_fr.c   # File carving algorithm (French — original version)
+├── docs/
+│   ├── presentation.pdf
+│   └── MCOT.pdf
+└── README.md
+```
 
-This program simulates a minimal file system from scratch. Files are stored as a flat hexadecimal dump (`fichier_hexadecimal.txt`) alongside an SQLite database (`database.db`) that holds the metadata table — mimicking the separation between raw data blocks and the file allocation table found on real drives.
+---
 
-**Simulating deletion** means simply dropping the file's row from the SQL table. The hex data remains untouched in the flat file, exactly as it would on a real disk. Recovery algorithms can then be run on that raw file without any database access.
+## Clément's part
 
-### Data model
+### Part 1 — Storage system simulator (`storage_sim.c`)
 
-Each file is stored in the SQLite table `fichiers` with the following fields:
+This program simulates a minimal file system from scratch. Files are stored as a flat hexadecimal dump (`hexadecimal_file.txt`) alongside an SQLite database (`file_manager.db`) that holds the metadata table — mimicking the separation between raw data blocks and the file allocation table found on real drives.
+
+**Simulating deletion** means simply dropping the file's row from the SQL table. The hex data remains untouched in the flat file, exactly as it would on a real disk. The carving algorithm (`recovery_files.c`) can then be run on that raw file without any database access.
+
+#### Data model
+
+Each file is stored in the SQLite table `files` with the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | INTEGER | Auto-incremented primary key |
-| `nom` | TEXT | File name (without extension) |
-| `extension` | TEXT | File extension (jpeg, png, gif…) |
-| `adresse` | TEXT | `offset:length` in the hex dump |
+| `name` | TEXT | File name (without extension) |
+| `extension` | TEXT | File extension (jpeg, png…) |
+| `address` | TEXT | `offset:length` in the hex dump |
 
-The `adresse` field encodes both where the file starts in the hex dump (`offset`) and how many bytes it occupies (`length`), separated by a colon — a deliberate design choice to keep the schema minimal.
+The `address` field encodes both where the file starts in the hex dump (`offset`) and how many bytes it occupies (`length`), separated by a colon — a deliberate design choice to keep the schema minimal.
 
-### Available operations
+#### Available operations
 
-The program exposes an interactive terminal menu with the following operations:
+The program exposes an interactive terminal menu:
 
 | Option | Function | Description |
 |--------|----------|-------------|
-| 1 | `ls_database` | List all files in the database |
-| 2 | `ajouter_fichier` | Add a file: convert to hex, append to dump, insert metadata, delete original |
-| 3 | `ouvrir_data` | Reconstruct a file from the hex dump using its stored offset/length |
-| 4 | `recherche` | Search files by extension |
-| 5 | `renommer` | Rename a file entry in the database |
-| 6 | `supprimer` | Delete a file: remove DB entry, compact the hex dump, update all offsets |
+| 1 | `list_database` | List all files in the database |
+| 2 | `add_file` | Convert a file to hex, append to dump, insert metadata, delete original |
+| 3 | `open_data` | Reconstruct a file from the hex dump using its stored offset/length |
+| 4 | `search` | Search files by extension |
+| 5 | `rename_file` | Rename a file entry in the database |
+| 6 | `delete_file` | Remove DB entry, compact the hex dump, update all offsets |
 | 7 | — | Quit |
 
-### Key implementation details
+#### Key implementation details
 
-**Adding a file** (`ajouter_fichier`): the binary file is read byte by byte, each byte written as two hex characters appended to `fichier_hexadecimal.txt`. The current file position before writing gives the offset; the byte count gives the length. Both are stored in the DB. The original file is then deleted from disk.
+**Adding a file** (`add_file`): the binary file is read byte by byte, each byte written as two hex characters appended to `hexadecimal_file.txt`. The file position before writing gives the offset; the byte count gives the length. Both are stored in the DB as `offset:length`. The original file is then deleted from disk.
 
-**Opening a file** (`ouvrir_data`): the offset and length are read from the DB, the hex dump is seeked to that position, and bytes are read two characters at a time and written back as binary — reversing the conversion exactly.
+**Opening a file** (`open_data`): the offset and length are read from the DB, the hex dump is seeked to that position, and bytes are read two characters at a time and written back as binary — reversing the conversion exactly.
 
-**Deleting a file** (`supprimer`): beyond removing the DB row, the hex dump is compacted in memory (the deleted block is excised from a buffer) and rewritten, and all subsequent offsets in the DB are decremented accordingly. This keeps the dump consistent.
+**Deleting a file** (`delete_file`): beyond removing the DB row, the entire hex dump is loaded into memory, the deleted block is excised, the buffer is rewritten to disk, and all subsequent offsets in the DB are decremented accordingly to keep the dump consistent.
 
-**SQL injection mitigation**: the interface uses `snprintf`-built queries with user input — a known limitation noted during development after testing with `DROP TABLE` inputs. Parameterised queries (`sqlite3_bind_*`) would be the correct fix.
+**SQL injection mitigation**: the interface uses `snprintf`-built queries with raw user input — a known limitation identified during testing with `DROP TABLE` inputs. Parameterised queries (`sqlite3_bind_*`) would be the correct fix.
 
-### Build & run
+#### Build & run
 
 ```bash
-gcc -o storage_sim storage_sim.c -lsqlite3
+gcc -o storage_sim src/storage_sim.c -lsqlite3
 ./storage_sim
 ```
 
-**Dependencies:** `sqlite3` (system library)
+**Dependency:** `sqlite3`
 
 ```bash
 # Ubuntu/Debian
@@ -86,9 +104,43 @@ sudo apt install libsqlite3-dev
 
 ---
 
+### Part 2 — File carving algorithm (`recovery_files.c`)
+
+This program takes `hexadecimal_file.txt` as input — typically produced after the database has been deleted — and attempts to reconstruct all files it can find by scanning for known file signatures.
+
+#### How it works
+
+The algorithm scans the hex dump sequentially, byte by byte. When it finds a sequence matching a known **header signature**, it enters "inside file" mode and accumulates bytes until it finds the matching **footer signature**. The extracted block is then written to disk as a recovered file.
+
+| Format | Header (hex) | Footer (hex) |
+|--------|-------------|-------------|
+| JPEG | `FF D8` | `FF D9` |
+| PNG | `89 50 4E 47` | `49 45 4E 44 AE 42 60 82` |
+
+File types are defined as an `Extension` struct holding the format name, header bytes, footer bytes, and their respective sizes — making it straightforward to add new formats.
+
+#### Build & run
+
+```bash
+gcc -o recovery_files src/recovery_files.c
+./recovery_files
+```
+
+The program reads `hexadecimal_file.txt` from the current directory and writes recovered files as `file1.jpeg`, `file2.png`, etc.
+
+To add a new file format, declare its header and footer byte arrays and pass a new `Extension` to `extract_file()` in `main()`.
+
+#### Known limitations
+
+- **Fragmented files** are not handled — the algorithm assumes contiguous storage
+- **Video formats (MOV)** were abandoned early due to variable and truncated signatures
+- **Text files** were attempted but proved unreliable due to ambiguous signatures (`0x00` / `0x0A`)
+
+---
+
 ## William's part
 
-William's part focuses on running file carving algorithms on **real storage devices** (USB drives, hard disks with deleted partitions) and comparing results against professional recovery tools such as TestDisk, Recuva, and Photorec.
+William's part focuses on running file carving on **real storage devices** (USB drives, hard disks with deleted partitions) and benchmarking recovery rates, speed, and accuracy against professional tools such as TestDisk, Recuva, and Photorec.
 
 His code and results will be available in his own repository — link to be added here.
 
@@ -97,19 +149,6 @@ His code and results will be available in his own repository — link to be adde
 ## Security implications
 
 A key takeaway of this project: **standard deletion is not secure**. Dropping a metadata entry leaves data fully intact on the storage medium. This highlights the importance of secure erase methods (multi-pass overwriting, encryption before deletion) for sensitive data — a point that applies equally to the simulated system and real drives.
-
----
-
-## Repository structure
-
-```
-.
-├── storage_sim.c       # Full C source — storage simulator
-├── docs/
-│   ├── presentation.pdf
-│   └── MCOT.pdf
-└── README.md
-```
 
 ---
 
