@@ -1,7 +1,6 @@
 # File Recovery from Raw Storage
 
 > **TIPE 2024-2025 · Cardot Clément & William Guerin-Garnier · MPI · Lycée Louis Thuillier**
-> Supervised by Mme Fanny Canivet
 
 ## What is a TIPE?
 
