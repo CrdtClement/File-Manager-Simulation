@@ -1,10 +1,11 @@
 # File Recovery from Raw Storage
 
 > **TIPE 2024-2025 · Cardot Clément & William Guerin-Garnier · MPI · Lycée Louis Thuillier**
+> Supervised by Mme Fanny Canivet
 
 ## What is a TIPE?
 
-In France, students in classes préparatoires (two-year intensive post-baccalaureate programs preparing for the grandes écoles competitive exams) must complete a TIPE (Travail d'Initiative Personnelle Encadré — supervised personal research project). It is evaluated as a standalone oral exam (~15 min presentation + questions) during the national concours and accounts for a significant portion of the final score.
+In France, students in *classes préparatoires* (two-year intensive post-baccalaureate programs preparing for the *grandes écoles* competitive exams) must complete a **TIPE** (*Travail d'Initiative Personnelle Encadré* — supervised personal research project). It is evaluated as a standalone oral exam (~15 min presentation + questions) during the national *concours* and accounts for a significant portion of the final score.
 
 The TIPE must be original, scientifically rigorous, and — for the MPI track (Mathematics, Physics, Computer Science) — rooted in at least one of those three disciplines. Each year a broad theme is announced; students must anchor their work to it.
 
@@ -20,47 +21,83 @@ When a file is deleted on most operating systems, only its metadata (the pointer
 
 The work is split into two complementary parts:
 
-- **Clément's part** — design and implementation of a **simulated storage system** (SQLite-based virtual USB drive) to provide a controlled environment for testing recovery algorithms
-- **William's part** — testing recovery algorithms on **real storage devices** (USB drives, hard disks) and benchmarking against professional tools (TestDisk, Recuva, Photorec)
+- **Clément's part** (this repository) — design and implementation of a **simulated storage system** in C with an SQLite backend, acting as a virtual file system to provide a controlled environment for developing and testing recovery algorithms
+- **William's part** (see [William's repository](#williams-part)) — testing recovery on **real storage devices** and benchmarking against professional tools
 
 ---
 
-## How it works
+## Clément's part — Storage system simulator (C + SQLite)
 
-### 1 — Storage simulation (SQLite)
+### What it does
 
-Real raw disk access is complex and hardware-dependent. To develop and test algorithms in a controlled setting, a virtual storage medium was built:
+This program simulates a minimal file system from scratch. Files are stored as a flat hexadecimal dump (`fichier_hexadecimal.txt`) alongside an SQLite database (`database.db`) that holds the metadata table — mimicking the separation between raw data blocks and the file allocation table found on real drives.
 
-- Files are converted to their **hexadecimal representation** and written to a flat `.txt` file simulating raw memory
-- File metadata (name, location, size, type) is stored in an **SQLite database** acting as the file allocation table
-- Deleting a file means dropping its entry from the SQL table — the raw hex data remains in the flat file
-- Recovery is then attempted on this raw file without access to the database
+**Simulating deletion** means simply dropping the file's row from the SQL table. The hex data remains untouched in the flat file, exactly as it would on a real disk. Recovery algorithms can then be run on that raw file without any database access.
 
-### 2 — File carving
+### Data model
 
-Recovery relies on **sequential scanning** of the raw binary data for known **file signatures** (magic bytes):
+Each file is stored in the SQLite table `fichiers` with the following fields:
 
-| Format | Header signature | Footer signature |
-|--------|-----------------|-----------------|
-| JPEG   | `FF D8 FF`      | `FF D9`         |
-| PNG    | `89 50 4E 47 0D 0A 1A 0A` | `49 45 4E 44 AE 42 60 82` |
-| GIF    | `47 49 46 38`   | `00 3B`         |
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | INTEGER | Auto-incremented primary key |
+| `nom` | TEXT | File name (without extension) |
+| `extension` | TEXT | File extension (jpeg, png, gif…) |
+| `adresse` | TEXT | `offset:length` in the hex dump |
 
-When a header is found, the algorithm reads forward until the matching footer, extracts the block, and attempts to reconstruct the file.
+The `adresse` field encodes both where the file starts in the hex dump (`offset`) and how many bytes it occupies (`length`), separated by a colon — a deliberate design choice to keep the schema minimal.
 
-### 3 — Integrity validation
+### Available operations
 
-Each recovered file is validated against its expected format structure to detect corruption or partial recovery.
+The program exposes an interactive terminal menu with the following operations:
 
-### 4 — Directory tree simulation
+| Option | Function | Description |
+|--------|----------|-------------|
+| 1 | `ls_database` | List all files in the database |
+| 2 | `ajouter_fichier` | Add a file: convert to hex, append to dump, insert metadata, delete original |
+| 3 | `ouvrir_data` | Reconstruct a file from the hex dump using its stored offset/length |
+| 4 | `recherche` | Search files by extension |
+| 5 | `renommer` | Rename a file entry in the database |
+| 6 | `supprimer` | Delete a file: remove DB entry, compact the hex dump, update all offsets |
+| 7 | — | Quit |
 
-A simulated directory structure was added to the SQLite schema, allowing recovery of file hierarchy information (paths, folder names) in addition to raw file content.
+### Key implementation details
+
+**Adding a file** (`ajouter_fichier`): the binary file is read byte by byte, each byte written as two hex characters appended to `fichier_hexadecimal.txt`. The current file position before writing gives the offset; the byte count gives the length. Both are stored in the DB. The original file is then deleted from disk.
+
+**Opening a file** (`ouvrir_data`): the offset and length are read from the DB, the hex dump is seeked to that position, and bytes are read two characters at a time and written back as binary — reversing the conversion exactly.
+
+**Deleting a file** (`supprimer`): beyond removing the DB row, the hex dump is compacted in memory (the deleted block is excised from a buffer) and rewritten, and all subsequent offsets in the DB are decremented accordingly. This keeps the dump consistent.
+
+**SQL injection mitigation**: the interface uses `snprintf`-built queries with user input — a known limitation noted during development after testing with `DROP TABLE` inputs. Parameterised queries (`sqlite3_bind_*`) would be the correct fix.
+
+### Build & run
+
+```bash
+gcc -o storage_sim storage_sim.c -lsqlite3
+./storage_sim
+```
+
+**Dependencies:** `sqlite3` (system library)
+
+```bash
+# Ubuntu/Debian
+sudo apt install libsqlite3-dev
+```
+
+---
+
+## William's part
+
+William's part focuses on running file carving algorithms on **real storage devices** (USB drives, hard disks with deleted partitions) and comparing results against professional recovery tools such as TestDisk, Recuva, and Photorec.
+
+His code and results will be available in his own repository — link to be added here.
 
 ---
 
 ## Security implications
 
-A key finding of this project: **standard deletion is not secure**. As long as data blocks are not overwritten, recovery is possible with basic tools. This highlights the importance of secure erase methods (multi-pass overwriting, encryption before deletion) for sensitive data.
+A key takeaway of this project: **standard deletion is not secure**. Dropping a metadata entry leaves data fully intact on the storage medium. This highlights the importance of secure erase methods (multi-pass overwriting, encryption before deletion) for sensitive data — a point that applies equally to the simulated system and real drives.
 
 ---
 
@@ -68,62 +105,18 @@ A key finding of this project: **standard deletion is not secure**. As long as d
 
 ```
 .
-├── src/
-│   ├── simulate_storage.py     # Build the virtual storage (hex dump + SQLite)
-│   ├── file_carving.py         # Sequential scan and file reconstruction
-│   ├── validate_files.py       # Integrity checks on recovered files
-│   └── interface.py            # Minimal GUI to browse recovered files
+├── storage_sim.c       # Full C source — storage simulator
 ├── docs/
-│   ├── presentation.pdf        # Oral presentation slides
-│   └── MCOT.pdf                # Research objectives document (MCOT)
-├── examples/
-│   └── sample_storage.txt      # Example raw hex storage file
+│   ├── presentation.pdf
+│   └── MCOT.pdf
 └── README.md
 ```
 
 ---
 
-## Dependencies
-
-| Dependency | Purpose |
-|------------|---------|
-| Python 3   | Main language |
-| `sqlite3`  | Storage simulation (standard library) |
-| `tkinter`  | Minimal interface (standard library) |
-
-No external packages required — everything runs on the Python standard library.
-
----
-
-## Usage
-
-```bash
-# Step 1 — build a simulated storage from a folder of files
-python src/simulate_storage.py input_folder/ storage.txt storage.db
-
-# Step 2 — delete the database (simulates file deletion)
-rm storage.db
-
-# Step 3 — run file carving on the raw storage
-python src/file_carving.py storage.txt recovered/
-
-# Step 4 — validate recovered files
-python src/validate_files.py recovered/
-```
-
----
-
-## Known limitations
-
-- **Video formats (MOV)** were abandoned early due to truncated and variable signatures — the project focuses on image formats only (JPEG, PNG, GIF)
-- **Fragmented files** (blocks not contiguous in memory) are not handled; carving assumes contiguous storage
-- **Overwritten data** is unrecoverable by design — the simulation does not model overwriting
-
----
-
 ## Academic context
 
-- **Programme:** MPI, 1st year (*5/2* preparatory year)
+- **Programme:** MPI, 1st year
 - **Theme:** *Transition, Transformation, Conversion* — 2024-2025
 - **Thematic positioning:** Computer Science (practical)
 - **Keywords:** File carving · File-system simulation · Search algorithm · Sequential reading · Database
