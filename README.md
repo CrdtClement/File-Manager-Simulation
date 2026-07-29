@@ -20,8 +20,8 @@ When a file is deleted on most operating systems, only its metadata (the pointer
 
 The work is split into two complementary parts:
 
-- **Clément's part** (this repository) — design and implementation of a **simulated storage system** in C with an SQLite backend, acting as a virtual file system to provide a controlled environment for developing and testing recovery algorithms
-- **William's part** (see [William's repository](#williams-part)) — testing recovery on **real storage devices** and benchmarking against professional tools
+- **Clément's part**  — design and implementation of a **simulated storage system** in C with an SQLite backend, acting as a virtual file system to provide a controlled environment for developing and testing recovery algorithms
+- **William's part**  — testing recovery on **real storage devices** and benchmarking against professional tools
 
 ---
 
