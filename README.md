@@ -1,7 +1,6 @@
 # File Recovery from Raw Storage
 
 > **TIPE 2024-2025 · Cardot Clément & William Guerin-Garnier · MPI · Lycée Louis Thuillier**
-> Supervised by Mme Fanny Canivet
 
 ## What is a TIPE?
 
@@ -160,7 +159,7 @@ A key takeaway of this project: **standard deletion is not secure**. Dropping a 
 - **Keywords:** File carving · File-system simulation · Search algorithm · Sequential reading · Database
 - **Group work:** Cardot Clément & William Guerin-Garnier
 
-This project was presented as a TIPE oral examination in 2025 at the IUT de Paris — Université Paris Cité, as part of the MPI *classes préparatoires* competitive admissions (*concours*).
+This project should have been presented as a TIPE oral examination in 2025 at the IUT de Paris — Université Paris Cité, but I personally chose to spend an additional year in preparatory classes (known as a "5/2" in France) to retake the engineering school entrance examinations.
 
 ---
 
