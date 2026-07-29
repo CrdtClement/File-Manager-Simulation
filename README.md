@@ -1,11 +1,10 @@
 # File Recovery from Raw Storage
 
 > **TIPE 2024-2025 · Cardot Clément & William Guerin-Garnier · MPI · Lycée Louis Thuillier**
-> Supervised by Mme Fanny Canivet
 
 ## What is a TIPE?
 
-In France, students in *classes préparatoires* (two-year intensive post-baccalaureate programs preparing for the *grandes écoles* competitive exams) must complete a **TIPE** (*Travail d'Initiative Personnelle Encadré* — supervised personal research project). It is evaluated as a standalone oral exam (~15 min presentation + questions) during the national *concours* and accounts for a significant portion of the final score.
+In France, students in classes préparatoires (two-year intensive post-baccalaureate programs preparing for the grandes écoles competitive exams) must complete a TIPE (Travail d'Initiative Personnelle Encadré — supervised personal research project). It is evaluated as a standalone oral exam (~15 min presentation + questions) during the national concours and accounts for a significant portion of the final score.
 
 The TIPE must be original, scientifically rigorous, and — for the MPI track (Mathematics, Physics, Computer Science) — rooted in at least one of those three disciplines. Each year a broad theme is announced; students must anchor their work to it.
 
